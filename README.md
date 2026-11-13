@@ -229,7 +229,9 @@ Docker-проверка использует отдельный временны
 
 Repository: https://github.com/mraliscoder/ripe-db-audit
 
-Checks run on pushes to `main` and pull requests. A version tag runs the same
+CI runs backend tests and linting, builds the frontend, and verifies Docker and
+job persistence on pushes to `main` and pull requests. Browser flows are not run
+in GitHub Actions. A version tag runs the same
 checks, then publishes the Docker image for `linux/amd64` and `linux/arm64` to
 `ghcr.io/mraliscoder/ripe-db-audit` and creates a GitHub release. Official Actions
 are pinned to immutable commits. Authentication uses the built-in `GITHUB_TOKEN`;

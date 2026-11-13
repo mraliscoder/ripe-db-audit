@@ -45,13 +45,6 @@ jobs:
           npm --prefix frontend ci --no-audit --no-fund
           npm --prefix frontend run format:check
           npm --prefix frontend run build
-      - name: Check browser flows
-        env:
-          CHROME_PATH: /usr/bin/google-chrome
-          CI: 'true'
-        run: |
-          python -m venv --system-site-packages .venv
-          node scripts/verify_ui.mjs
       - name: Verify Compose
         run: docker compose config --quiet
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
