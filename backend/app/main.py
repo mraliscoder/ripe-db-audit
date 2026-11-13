@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
+from . import __version__
 from .config import RULESET, Settings
 from .engine import AnalysisLimit, Analyzer
 from .models import regid
@@ -166,7 +167,7 @@ def create_app(settings=None, analyzer=None):
             await client.close()
             store.close()
 
-    app = FastAPI(title="RIPE DB Audit", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="RIPE DB Audit", version=__version__, lifespan=lifespan)
 
     def valid_session(cookie):
         try:
