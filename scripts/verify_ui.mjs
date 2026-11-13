@@ -190,7 +190,14 @@ try {
     "none",
   );
   await screenshot("initial");
-  checks.push("Empty state: no fabricated results");
+  assert.equal(await evaluate('document.getElementById("regid").value'), "");
+  assert.equal(
+    await evaluate('document.getElementById("regid").placeholder'),
+    "ru.ecode",
+  );
+  checks.push(
+    "Empty state: blank regID with example placeholder, no fabricated results",
+  );
   assert.equal(
     await evaluate('document.querySelectorAll("a.nav-link").length'),
     0,

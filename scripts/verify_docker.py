@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
@@ -23,6 +24,7 @@ def main():
         "AUDIT_BIND": "127.0.0.1",
         "AUDIT_PORT": "0",
         "AUDIT_ACCESS_TOKEN": "",
+        "AUDIT_ALLOWED_ORIGINS": "",
         "RIPE_API_KEYS_JSON": "{}",
         "AUDIT_WEBHOOK_URL": "",
         "AUDIT_WEBHOOK_SECRET": "",
@@ -53,6 +55,23 @@ def main():
         base = up()
         assert json.loads(read(base + "/api/health"))["status"] == "ok"
         checks.append("Healthy API on an automatically assigned loopback port")
+        for site, expected in [("same-origin", 422), ("cross-site", 403)]:
+            request = urllib.request.Request(
+                base + "/api/analyses",
+                data=b'{"regid":"invalid"}',
+                headers={
+                    "Content-Type": "application/json",
+                    "Origin": "https://audit.example",
+                    "Sec-Fetch-Site": site,
+                },
+            )
+            try:
+                urllib.request.urlopen(request, timeout=10)
+                raise AssertionError("Invalid regID unexpectedly accepted")
+            except urllib.error.HTTPError as error:
+                assert error.code == expected, (site, error.code)
+        checks.append("HTTPS proxy origins accepted; cross-site browser writes rejected")
+
         html = read(base)
         assert "RIPE DB Audit" in html
         for asset in re.findall(r'(?:src|href)="(/assets/[^"]+)"', html):

@@ -1,172 +1,137 @@
 # RIPE DB Audit
 
-Фронтенд и API для проверки ресурсов RIPE по regID. Введите `ru.ecode`:
-система собирает allocations, дочерние IPv4/IPv6, собственные и спонсируемые
-ASN, BGP-анонсы и объяснимые замечания.
+[![Checks](https://github.com/mraliscoder/ripe-db-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/mraliscoder/ripe-db-audit/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mraliscoder/ripe-db-audit)](https://github.com/mraliscoder/ripe-db-audit/releases/latest)
 
-## Быстрый запуск
+Audit a LIR's IPv4, IPv6 and ASN resources using its RIPE regID, such as
+`ru.ecode`. RIPE DB Audit combines registration data and BGP observations in a
+searchable dashboard with a network tree, findings and CSV export.
 
-Нужны Python 3.11+ и Node.js 22.12+ (проверено на Python 3.14, Node.js 24).
+The application is read-only. It does not modify RIPE objects, send emails or
+create tickets.
+
+## Features
+
+- Discover allocations, child networks, organisations, and own or sponsored ASNs.
+- Compare registrations with exact, more-specific and covering BGP announcements.
+- Inspect findings with error codes, explanations, source evidence and RIPE Database links.
+- Follow analysis progress live; reload the page to resume viewing a running job.
+- Reuse completed results for one hour and keep previous snapshots at permanent job URLs.
+
+## Quick start
+
+Requires Docker with the Compose plugin. Published images support **Linux amd64
+and arm64** and can be pulled without signing in.
 
 ```sh
 git clone https://github.com/mraliscoder/ripe-db-audit.git
 cd ripe-db-audit
-./start.sh
+
+export AUDIT_IMAGE=ghcr.io/mraliscoder/ripe-db-audit:0.1.0
+docker compose pull
+docker compose up -d --no-build --wait
 ```
 
-Откройте **http://127.0.0.1:8090**. Приложение выполняет только анализ и не
-создаёт задачи, не отправляет письма и не изменяет записи RIPE.
+Open **http://127.0.0.1:8090** and enter your regID. Public analysis works without
+RIPE credentials. Interactive API documentation is available at
+**http://127.0.0.1:8090/docs**.
 
-Ручной запуск:
+For a different port, set `AUDIT_PORT` before starting Compose. To save your
+settings, copy [.env.example](.env.example) to `.env` and set `AUDIT_IMAGE` there.
+Use a version tag for a fixed release, or `latest` to follow stable releases.
+
+To build the image from source instead:
 
 ```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.lock
-npm --prefix frontend ci
-npm --prefix frontend run build
-.venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8090
+AUDIT_IMAGE=ripe-db-audit:local docker compose up -d --build --wait
 ```
 
-Для разработки: `npm --prefix frontend run dev` (Vite проксирует `/api` на 8090).
-В собранном варианте фронтенд и API обслуживает один FastAPI-сервер.
+## Audit checks
 
-Интерфейс: React + TypeScript, Tailwind CSS и shadcn/ui (Radix, neutral).
-Все элементы интерфейса и сообщения анализа — на английском.
+| Resource | Checks                                                                                                                                                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| IPv6     | ASSIGNED prefix lengths of /48–/64; valid AGGREGATED-BY-LIR assignment sizes; no more than five nested ALLOCATED-BY-LIR objects; assignment registration for each announcement, including more-specifics.                             |
+| IPv4     | PA/PI status consistency, SUB-ALLOCATED PA parentage, assignment nesting and aggregate assignment sizes, based on [RIPE-826](https://www.ripe.net/publications/docs/ripe-826/). ALLOCATED-ASSIGNED PA is recognised as an assignment. |
+| ASN      | Current origin announcements and inactivity over three calendar months for own and sponsored ASNs. Newly registered ASNs are excluded from the inactivity violation until that period has elapsed.                                    |
 
-## Что реализовано
+The announcement check requires at least one relevant ASSIGNED or valid
+AGGREGATED-BY-LIR registration within the allocation for each announcement. It
+checks more-specific announcements separately; it does **not** require assignments
+to cover every address in an announced aggregate.
 
-- Поиск regID через официальный `alloclist.txt` RIPE NCC.
-- Точная загрузка корневых объектов, обратный поиск `org`/`sponsoring-org`,
-  все дочерние inetnum/inet6num, ORG и собственные/спонсируемые aut-num.
-- Рекурсивный сбор RIPE RIS без усечения на 50 more-specifics; единый момент
-  снимка, анонсы агрегатов, более специфичные и покрывающие маршруты.
-- IPv4-диапазоны с не-CIDR границами сохраняются как настоящие inetnum.
-- Правила IPv6 из прежнего аудита и ASN-активность за три календарных месяца.
-- IPv4 на основании [RIPE-826](https://www.ripe.net/publications/docs/ripe-826/):
-  статусы PA/PI, допустимые субаллокации, вложенные назначения, учёт
-  `ALLOCATED-ASSIGNED PA`, необязательный IPv4 `assignment-size` у агрегатов.
-- Отсутствие IPv4-назначения, предполагаемое по BGP, помечается предупреждением
-  по правилу аудита. Политика, схема БД и внутренние правила имеют разные метки.
-- Ресурсы с серверной пагинацией, дерево с подгрузкой веток и замечания.
-  Карточки ресурсов, правила и источники открываются в боковом окне; экспорт CSV.
-- Progress SSE с Event ID, heartbeat и восстановлением; резервный опрос статуса.
-  Перезагрузка страницы продолжает проверку, серверная задача не прерывается.
-- SQLite: задачи, события, снимки и кэш на **3600 секунд от завершения**.
-  Повторный запрос в течение часа возвращает тот же результат. Одновременные
-  запросы одного regID объединяются. Сбой/неполный результат не кэшируются как успех.
-- Опциональное подписанное уведомление внешнему сервису о завершении.
+IPv6 size and nesting thresholds are application audit rules. Findings distinguish
+RIPE policy, database schema and audit rules. Missing IPv4 assignments inferred
+from BGP are warnings. Existing IPv4 allocations larger than /24 are not flagged
+solely because of their size.
 
-## Границы публичного анализа
+### ASN status colours
 
-Один regID не даёт доступ к закрытому LIR Portal. Публичный режим использует
-официальный каталог allocations и связи ORG в RIPE Database. Общая ORG может
-использоваться несколькими LIR; основание связи каждого ресурса показывается.
-Каталог RIPE обновляется отдельно от базы, поэтому новые transfers могут
-появляться с задержкой. Ошибки источников явно дают `partial`, а не «всё чисто».
+| Status                                                               | Display                             |
+| -------------------------------------------------------------------- | ----------------------------------- |
+| Currently announcing                                                 | Neutral: **Active**                 |
+| Not announcing now, but active within the last three calendar months | Yellow: **Inactive < 3 months**     |
+| Newly registered and not announcing                                  | Yellow: **New ASN · not announced** |
+| Inactive for more than three calendar months                         | Red finding                         |
+| Insufficient activity or registration data                           | Explicit unknown status             |
 
-Лимит `/24` из §5.1 RIPE-826 относится к новым выдачам из пула RIPE NCC,
-а не к любым существующим allocations. Приложение не считает исторический
-большой allocation нарушением только из-за длины префикса. Контракты, цель
-назначений, статистика агрегатов и применимость истории выдач требуют
-ручной проверки; это видно в UI.
+Yellow statuses do not increase the finding count. An unavailable source is not
+treated as evidence that a resource is compliant.
 
-## Точный список LIR Portal (опционально)
+### Data sources and coverage
 
-Ключи [My Resources API](https://www.ripe.net/publications/documentation/developer-documentation/lir-portal-api-keys/)
-задаются **только на сервере**:
+Discovery starts with the [RIPE NCC allocation catalogue](https://ftp.ripe.net/ripe/stats/membership/alloclist.txt).
+The [RIPE Database REST API](https://docs.db.ripe.net/RIPE-Database-Structure/REST-API/)
+provides registrations and ORG relationships; [RIPEstat / RIS](https://stat.ripe.net/docs/data-api/)
+provides routing and ASN activity data. Source timestamps are shown in UTC.
 
-```sh
-export RIPE_API_KEYS_JSON='{"ru.ecode":"YOUR_MY_RESOURCES_KEY"}'
-export AUDIT_ACCESS_TOKEN='YOUR_LONG_RANDOM_INSTANCE_ACCESS_TOKEN'
-./start.sh
-```
+Public ORG relationships can span multiple LIR accounts, so public discovery is
+not an exact private LIR Portal inventory. Catalogue updates may also lag behind
+registration changes. Optional LIR Portal keys can refine the inventory; see
+[private inventory](docs/operations.md#private-lir-portal-inventory).
 
-При наличии Portal-ключей токен доступа обязателен: приватная инвентаризация
-не становится доступна всем посетителям. В UI появится вход по токену.
-Сессия — подписанная HttpOnly SameSite=Strict cookie на восемь часов;
-токены не попадают в URL, localStorage или результаты. Проверяется соответствие
-regID ключу. Ключи хранятся в окружении, не в SQLite.
+Contracts, assignment justification, utilisation and aggregate assignment
+statistics require manual review. The audit does not establish full policy
+compliance. BGP-only tree entries are observations, not additional RIPE objects.
 
-Этот режим реализован, но живой запрос к закрытому API не выполнялся:
-в рабочей сессии нет ключа My Resources. Публичный `ru.ecode` проверен целиком.
+## Configuration
 
-## API и прогресс
+Docker Compose reads `.env` automatically. Local runs use exported environment
+variables. Defaults are listed in [.env.example](.env.example).
 
-```text
-POST /api/analyses                         {"regid":"ru.ecode"}
-GET  /api/analyses                         последние 20 проверок
-GET  /api/analyses/{id}                    состояние и текущий этап
-GET  /api/analyses/{id}/events              SSE; Last-Event-ID или ?after=N
-GET  /api/analyses/{id}/result              метаданные и сводка
-GET  /api/analyses/{id}/result?full=true    полный JSON
-GET  /api/analyses/{id}/resources           family,q,org,bad,parent,offset,limit
-GET  /api/analyses/{id}/resources/{id}      карточка, замечания и анонсы
-GET  /api/analyses/{id}/findings            family,q,offset,limit
-GET  /api/analyses/{id}/export.csv          CSV замечаний
-GET  /api/health
-```
+| Variable                    | Default               | Purpose                                                                |
+| --------------------------- | --------------------- | ---------------------------------------------------------------------- |
+| `AUDIT_IMAGE`               | `ripe-db-audit:local` | Compose image; set to a GHCR tag to use a published release.           |
+| `AUDIT_BIND`                | `127.0.0.1`           | Compose host bind address.                                             |
+| `AUDIT_PORT`                | `8090`                | Compose host port.                                                     |
+| `AUDIT_DB`                  | `data/audit.sqlite3`  | Local SQLite path. Compose fixes this to `/app/data/audit.sqlite3`.    |
+| `AUDIT_MAX_JOBS`            | `2`                   | Maximum concurrent analyses.                                           |
+| `AUDIT_MAX_OBJECTS`         | `20000`               | Maximum resources collected per analysis.                              |
+| `AUDIT_MAX_ROUTING_QUERIES` | `4096`                | Maximum BGP queries per analysis.                                      |
+| `AUDIT_JOB_TIMEOUT`         | `1800`                | Analysis timeout in seconds.                                           |
+| `AUDIT_ALLOWED_ORIGINS`     | Unset                 | Exact public origins for proxy clients without Fetch Metadata headers. |
+| `FORWARDED_ALLOW_IPS`       | Uvicorn default       | Trusted proxy addresses/networks for forwarded headers.                |
+| `AUDIT_ACCESS_TOKEN`        | Unset                 | Optional shared instance access token.                                 |
+| `RIPE_API_KEYS_JSON`        | `{}`                  | Server-side regID-to-LIR-Portal-key mapping.                           |
+| `AUDIT_WEBHOOK_URL`         | Unset                 | Optional HTTPS completion callback.                                    |
+| `AUDIT_WEBHOOK_SECRET`      | Unset                 | HMAC secret for completion callbacks.                                  |
 
-OpenAPI: **http://127.0.0.1:8090/docs**. Не передавайте токены в URL.
-Если включён доступ по токену, API также принимает `Authorization: Bearer …`.
+Portal keys require `AUDIT_ACCESS_TOKEN`. When access protection is enabled, the
+UI prompts for the token; API clients can use `Authorization: Bearer <token>`.
+There are no per-user accounts: authorised users share access to the instance's
+analyses. See [authentication and webhooks](docs/operations.md).
 
-Новые задачи отвечают `202`; `cache_hit` сообщает о повторном использовании.
-Статусы: queued, running, complete, partial, failed, interrupted. После
-перезапуска незавершённая задача становится interrupted, готовый кэш сохраняется.
-Каждое событие содержит stage, message, done/total (если известны), время,
-число объектов и запросов. Прогресс относится к текущему этапу, а не к
-придуманному проценту всей работы. Для nginx отключите buffering на SSE
-и задайте read timeout выше интервала heartbeat; ответ также содержит
-`X-Accel-Buffering: no`.
+## Storage and deployment
 
-## Webhook завершения (опционально)
+Jobs, results and progress events are stored in SQLite. Compose mounts a persistent
+`analysis-data` volume at `/app/data`.
 
-Для фронтенда достаточно SSE. Webhook нужен только внешнему серверу:
+- **Cache:** complete results are reused for 3,600 seconds after completion.
+- **Retention:** cache expiry does not delete jobs or change their IDs. Saved result links continue to work while the database is retained.
+- **Failures:** partial and failed results are not reused as successful cache entries. Analyses interrupted by a restart must be run again.
 
-```sh
-export AUDIT_WEBHOOK_URL='https://receiver.example/audit-completed'
-export AUDIT_WEBHOOK_SECRET='YOUR_LONG_RANDOM_SIGNING_SECRET'
-```
-
-URL задаёт администратор окружением; пользователи не могут отправить
-произвольный callback URL. По умолчанию webhook выключен и ничего не отправляет.
-Payload: event `analysis.finished`, стабильные event_id/job_id, regid, status,
-completed_at, summary. Подпись: `X-ARC-Signature: sha256=<hex HMAC-SHA256>`
-над точными байтами тела; `X-ARC-Event-ID` позволяет удалить дубли.
-Максимум три попытки; получатель должен обеспечивать идемпотентность по event ID.
-Сбой уведомления не инвалидирует результат и не запускает анализ повторно.
-
-## Эксплуатация
-
-Переменные: AUDIT_DB (по умолчанию `data/audit.sqlite3`), AUDIT_MAX_JOBS=2,
-AUDIT_MAX_OBJECTS=20000, AUDIT_MAX_ROUTING_QUERIES=4096, AUDIT_JOB_TIMEOUT=1800.
-Сервер и каталог `data/` сохраняйте между перезапусками. Час — срок повторного
-использования результата; сохранённая локальная история остаётся в SQLite,
-пока оператор не удалит БД. API возвращает последние 20 проверок.
-
-Запускайте **один uvicorn worker**: очередь и объединение задач находятся
-в памяти одного процесса, снимки и события — в SQLite/WAL. Для масштабирования
-на несколько инстансов понадобится общая очередь/блокировки (например, Redis).
-Локальный запуск привязан к 127.0.0.1. Для внешнего размещения настройте HTTPS,
-доступ и лимиты на своём reverse proxy; секреты остаются на сервере.
-
-## Docker
-
-Из каталога репозитория:
-
-```sh
-docker compose up -d --build --wait
-```
-
-Откройте **http://127.0.0.1:8090**. Если этот порт занят локальным запуском,
-используйте другой: `AUDIT_PORT=8092 docker compose up -d --build --wait`.
-Сборка включает React/shadcn и API; Node.js и Python на хосте не нужны.
-Контейнер работает от непривилегированного пользователя, с healthcheck и одним
-worker. Файлы приложения доступны только для чтения; SQLite хранится отдельно.
-
-Конфигурация необязательна: `cp .env.example .env`, затем задайте порт,
-лимиты и при необходимости токен доступа. По умолчанию используются публичные
-данные RIPE. Порт привязан к `127.0.0.1`; для доступа извне задайте
-`AUDIT_BIND=0.0.0.0` и настройте HTTPS/reverse proxy. Секреты не входят в образ.
+Keep the same Compose project and data volume when redeploying. A new or empty
+volume starts a separate history. `docker compose down` preserves the volume;
+`docker compose down -v` deletes it and the stored results.
 
 ```sh
 docker compose ps
@@ -174,90 +139,107 @@ docker compose logs -f analyzer
 docker compose down
 ```
 
-Именованный volume `analysis-data` сохраняет задания, события, результаты и
-постоянные job ID между перезапусками и пересборками. Истечение часового кэша
-не удаляет сохранённые результаты. Команда `docker compose down` сохраняет
-volume; `docker compose down -v` удаляет его вместе с историей.
+Run **one application worker**: job scheduling and deduplication use in-process
+state. The container runs as a non-root user, has a healthcheck and keeps the
+application filesystem read-only.
 
-### Перенос существующих job ID из локального запуска
+For external deployment, configure HTTPS and access control at your reverse proxy.
+Disable proxy buffering for `/api/analyses/*/events` and keep read timeouts above
+the 10-second SSE heartbeat interval. The default Compose port is loopback-only.
 
-Новый Docker volume изначально пуст. Чтобы перенести текущую локальную базу,
-сначала создайте согласованную копию SQLite (она учитывает WAL):
+See [backup and database migration](docs/operations.md#backups-and-migration)
+before moving an existing installation, and [reverse proxy setup](docs/operations.md#reverse-proxy-setup)
+when serving the application behind HTTPS.
 
-```sh
-python3 - <<'PYBACKUP'
-import sqlite3
-with sqlite3.connect('data/audit.sqlite3') as source:
-    with sqlite3.connect('/tmp/ripe-db-audit.sqlite3') as target:
-        source.backup(target)
-PYBACKUP
-```
+## API
 
-Импортируйте её **до первого запуска Docker**, в пустой volume:
+Start an analysis:
 
 ```sh
-docker compose build
-docker compose run --rm --no-deps -T analyzer python -c 'import sys; from pathlib import Path; p = Path("/app/data/audit.sqlite3"); p.exists() and sys.exit("Database already exists; import cancelled"); p.write_bytes(sys.stdin.buffer.read())' < /tmp/ripe-db-audit.sqlite3
-docker compose up -d --wait
+curl -X POST http://127.0.0.1:8090/api/analyses \
+  -H 'Content-Type: application/json' \
+  -d '{"regid":"ru.ecode"}'
 ```
 
-Сохранённые ссылки продолжат работать на том же домене. Импорт не перезаписывает
-существующую базу контейнера. Завершённые задания сохраняются; незавершённые
-после перезапуска требуют повторного анализа.
+The response contains the job `id`. A valid cached result returns the same ID with
+`cache_hit: true`; a running analysis for the same regID is joined.
 
-## Проверки
+| Method | Endpoint                                     | Purpose                                                      |
+| ------ | -------------------------------------------- | ------------------------------------------------------------ |
+| `POST` | `/api/analyses`                              | Start, join or reuse an analysis.                            |
+| `GET`  | `/api/analyses`                              | Latest 20 stored jobs.                                       |
+| `GET`  | `/api/analyses/{id}`                         | Job status and progress.                                     |
+| `GET`  | `/api/analyses/{id}/events`                  | SSE progress stream.                                         |
+| `GET`  | `/api/analyses/{id}/result`                  | Result metadata and summary; `?full=true` includes all data. |
+| `GET`  | `/api/analyses/{id}/resources`               | Paginated resources.                                         |
+| `GET`  | `/api/analyses/{id}/resources/{resource_id}` | Resource details, findings and routes.                       |
+| `GET`  | `/api/analyses/{id}/findings`                | Paginated findings.                                          |
+| `GET`  | `/api/analyses/{id}/export.csv`              | Findings CSV.                                                |
+| `POST` | `/api/session`                               | Create a browser session using an instance token.            |
+| `GET`  | `/api/health`                                | Health and ruleset information.                              |
+
+Resources support `family`, `q`, `org`, `bad`, `parent`, `include_bgp`, `offset`
+and `limit`. Findings support `family`, `q`, `offset` and `limit`. Page size defaults
+to 50, with a maximum of 200. URL-encode resource IDs containing slashes or colons.
+
+The SSE stream emits `progress` and `finished` events. Reconnect using
+`Last-Event-ID` or `?after=<event-id>`. The UI also polls status if streaming is
+unavailable. See `/docs` for request and response schemas.
+
+## Development
+
+Use **Python 3.13+** and **Node.js 24**. The stack is FastAPI, React, TypeScript,
+Tailwind CSS, shadcn/ui and SQLite.
+
+```sh
+./start.sh
+```
+
+The script creates a virtual environment, installs dependencies, builds the
+frontend and starts the application at http://127.0.0.1:8090. It accepts `AUDIT_HOST`
+and `PORT` to change the local bind address and port.
+
+For frontend development, keep the backend running and use a second terminal:
+
+```sh
+npm --prefix frontend run dev
+```
+
+Vite proxies `/api` to the backend on port 8090.
+
+### Checks
 
 ```sh
 .venv/bin/python -m pytest backend/tests -q
+.venv/bin/ruff check backend scripts
+npm --prefix frontend run format:check
 npm --prefix frontend run build
-node scripts/verify_ui.mjs
 python3 scripts/verify_docker.py
 ```
 
-UI-тест использует изолированный тестовый API на 8091 и headless Chrome.
-Он воспроизводит сохранённый публичный результат из backend/tests/fixtures/, а не вызывает RIPE повторно; проверяет
-загрузку, SSE, кэш, таблицы, дерево, поиск, ошибки/неполноту, опрос при обрыве,
-клавиатуру, мобильную ширину и axe. На другой ОС задайте CHROME_PATH.
-Артефакты: `artifacts/ui-report.json`, accessibility.json и PNG.
-Строгая проверка дизайн-контракта: `premium-audit.json`.
+Docker verification uses a temporary Compose project to check the API, frontend,
+SSE and job persistence across container recreation. It does not query RIPE or
+modify the application's existing database.
 
-Docker-проверка использует отдельный временный Compose-проект и volume,
-проверяет healthcheck, собранный UI, SSE и доступ к прежнему job ID после
-пересоздания контейнера. Она не вызывает RIPE и не меняет рабочую базу.
+GitHub CI runs backend tests, linting, frontend builds and Docker checks. Browser
+flows are not part of CI. An optional local browser check is available through
+`node scripts/verify_ui.mjs`; set `CHROME_PATH` if Chrome is not at the default
+macOS location.
 
-## GitHub releases and GHCR
+## Releases
 
-Repository: https://github.com/mraliscoder/ripe-db-audit
+[Release history](https://github.com/mraliscoder/ripe-db-audit/releases) ·
+[Container images](https://github.com/mraliscoder/ripe-db-audit/pkgs/container/ripe-db-audit)
 
-CI runs backend tests and linting, builds the frontend, and verifies Docker and
-job persistence on pushes to `main` and pull requests. Browser flows are not run
-in GitHub Actions. A version tag runs the same
-checks, then publishes the Docker image for `linux/amd64` and `linux/arm64` to
-`ghcr.io/mraliscoder/ripe-db-audit` and creates a GitHub release. Official Actions
-are pinned to immutable commits. Authentication uses the built-in `GITHUB_TOKEN`;
-no personal access token or Docker Hub credentials are required.
-
-Create a release after merging the code:
+Pushing a version tag runs the release checks, publishes multi-platform images to
+`ghcr.io/mraliscoder/ripe-db-audit` and creates a GitHub release:
 
 ```sh
-git tag v1.0.0
-git push origin v1.0.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
-Stable releases publish version, minor, major (except `0`) and `latest` image
-tags. Prereleases such as `v1.1.0-rc.1` publish only their exact version tag and
-never replace `latest`. The workflow can also be rerun manually for an existing
-version tag. Existing GitHub release notes are preserved.
-
-To run a published image using Compose:
-
-```sh
-export AUDIT_IMAGE=ghcr.io/mraliscoder/ripe-db-audit:latest
-docker compose pull
-docker compose up -d --no-build --wait
-```
-
-For reproducible deployments, choose a version tag or the immutable image digest
-from the release notes. The data volume and permanent job IDs are unchanged.
-If anonymous image pulls are needed, set the package visibility to Public in
-GitHub Packages after its first publication.
+Stable releases publish exact-version, minor-version and `latest` tags. Major
+version tags are also published from version 1 onwards. Prereleases publish only
+their exact version and leave `latest` unchanged. Release notes include an
+immutable image digest for pinned deployments.

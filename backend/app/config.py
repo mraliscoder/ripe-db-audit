@@ -3,6 +3,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .origins import normalize_origin
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -10,6 +12,13 @@ ROOT = Path(__file__).resolve().parents[2]
 class Settings:
     db_path: Path = field(
         default_factory=lambda: Path(os.environ.get("AUDIT_DB", ROOT / "data" / "audit.sqlite3"))
+    )
+    allowed_origins: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            value.strip()
+            for value in os.environ.get("AUDIT_ALLOWED_ORIGINS", "").split(",")
+            if value.strip()
+        )
     )
     cache_seconds: int = 3600
     max_jobs: int = field(default_factory=lambda: int(os.environ.get("AUDIT_MAX_JOBS", "2")))
@@ -30,6 +39,10 @@ class Settings:
     )
 
     def __post_init__(self):
+        if any(normalize_origin(value) is None for value in self.allowed_origins):
+            raise ValueError(
+                "AUDIT_ALLOWED_ORIGINS must contain exact http(s) origins without paths"
+            )
         if min(self.max_jobs, self.max_objects, self.max_routing_queries, self.job_timeout) <= 0:
             raise ValueError("Analysis limits must be positive")
         if self.portal_keys and not self.access_token:

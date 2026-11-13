@@ -38,3 +38,37 @@ def test_restart_marks_inflight_interrupted_but_preserves_complete_cache(tmp_pat
     assert reopened.get("a")["status"] == "interrupted"
     assert reopened.cache("key-b")["id"] == "b"
     reopened.close()
+
+
+@pytest.mark.parametrize(
+    "headers,allowed,status",
+    [
+        ({"Origin": "https://audit.example", "Sec-Fetch-Site": "same-origin"}, (), 202),
+        ({"Origin": "https://audit.example", "X-Forwarded-Host": "audit.example"}, (), 403),
+        ({"Origin": "https://audit.example"}, ("https://audit.example",), 202),
+        ({"Origin": "https://audit.example:443"}, ("https://audit.example",), 202),
+        ({"Origin": "https://audit.example:8443"}, ("https://audit.example",), 403),
+        ({"Origin": "https://audit.example.attacker.test"}, ("https://audit.example",), 403),
+        ({"Origin": "https://other.test", "Sec-Fetch-Site": "cross-site"}, (), 403),
+        ({"Origin": "https://sibling.test", "Sec-Fetch-Site": "same-site"}, (), 403),
+        ({"Origin": "null", "Sec-Fetch-Site": "same-origin"}, (), 403),
+        ({"Origin": "http://testserver:80"}, (), 202),
+        ({"Sec-Fetch-Site": "cross-site"}, (), 403),
+        ({}, (), 202),
+    ],
+)
+def test_request_origin_through_reverse_proxy(tmp_path, headers, allowed, status):
+    settings = Settings(db_path=tmp_path / "origins.db", allowed_origins=allowed)
+    with TestClient(create_app(settings, FakeAnalyzer())) as client:
+        response = client.post("/api/analyses", json={"regid": "ru.ecode"}, headers=headers)
+        assert response.status_code == status
+        if status == 403:
+            assert "origin" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "origin", ["*", "null", "https://audit.example/path", "https://user@audit.example"]
+)
+def test_invalid_public_origins_are_rejected(origin):
+    with pytest.raises(ValueError, match="AUDIT_ALLOWED_ORIGINS"):
+        Settings(allowed_origins=(origin,))

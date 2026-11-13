@@ -20,6 +20,7 @@ from . import __version__
 from .config import RULESET, Settings
 from .engine import AnalysisLimit, Analyzer
 from .models import regid
+from .origins import allows_request
 from .sources import RipeClient, SourceError, UnknownRegid
 from .storage import Store
 
@@ -182,10 +183,18 @@ def create_app(settings=None, analyzer=None):
     @app.middleware("http")
     async def headers(request, call_next):
         # Browser jobs stay on this origin; no secret/token is accepted from URLs.
-        origin = request.headers.get("origin")
-        if request.method == "POST" and origin and origin != str(request.base_url).rstrip("/"):
-            raise_response = Response("Cross-origin request refused", status_code=403)
-            return raise_response
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not allows_request(
+            request, settings.allowed_origins
+        ):
+            return Response(
+                json.dumps(
+                    {
+                        "detail": "Request origin is not allowed. Configure AUDIT_ALLOWED_ORIGINS for this site's public URL."
+                    }
+                ),
+                status_code=403,
+                media_type="application/json",
+            )
         if (
             settings.access_token
             and request.url.path.startswith("/api/")

@@ -68,3 +68,7 @@ with activity within three calendar months is yellow, labelled Inactive < 3 mont
 New ASNs without announcements are also yellow, labelled New ASN · not announced.
 These statuses are not findings. Longer inactivity retains the existing violation.
 Legacy cached recently_announced + BGP none renders the same yellow state.
+
+Initial analysis form has an empty regID value; ru.ecode appears only as its
+placeholder. Same-origin Fetch Metadata works across reverse proxies; clients
+without it use exact-origin verification or the configured public-origin list.

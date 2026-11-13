@@ -170,7 +170,7 @@ function Bgp({ row }: { row: Resource }) {
 }
 
 export default function App() {
-  const [regid, setRegid] = useState("ru.ecode"),
+  const [regid, setRegid] = useState(""),
     [fieldError, setFieldError] = useState("");
   const [jobId, setJobId] = useState(initial.get("job") || ""),
     [job, setJob] = useState<Job | null>(null),
