@@ -27,7 +27,7 @@ and arm64** and can be pulled without signing in.
 git clone https://github.com/mraliscoder/ripe-db-audit.git
 cd ripe-db-audit
 
-export AUDIT_IMAGE=ghcr.io/mraliscoder/ripe-db-audit:0.1.0
+export AUDIT_IMAGE=ghcr.io/mraliscoder/ripe-db-audit:0.1.1
 docker compose pull
 docker compose up -d --no-build --wait
 ```
@@ -235,8 +235,8 @@ Pushing a version tag runs the release checks, publishes multi-platform images t
 `ghcr.io/mraliscoder/ripe-db-audit` and creates a GitHub release:
 
 ```sh
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 Stable releases publish exact-version, minor-version and `latest` tags. Major
