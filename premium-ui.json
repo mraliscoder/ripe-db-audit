@@ -1,0 +1,33 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": [
+    "frontend/src",
+    "frontend/index.html"
+  ],
+  "locale": "en-GB",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": [
+    "Form",
+    "Select/Listbox",
+    "Scrollbar",
+    "Toast",
+    "CRUD"
+  ],
+  "ownership": {
+    "Select/Listbox": "authored"
+  },
+  "requiredCommands": [
+    "unit",
+    "build",
+    "e2e"
+  ],
+  "commands": {
+    "unit": ".venv/bin/python -m pytest backend/tests -q",
+    "build": "npm --prefix frontend run build",
+    "e2e": "node scripts/verify_ui.mjs"
+  },
+  "evidence": {
+    "crudFullFlow": "backend/tests/test_api.py",
+    "failurePaths": "backend/tests/test_api.py"
+  }
+}

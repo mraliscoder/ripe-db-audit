@@ -1,0 +1,17 @@
+.git
+.venv
+**/node_modules
+frontend/dist
+data
+artifacts
+backend/tests
+scripts
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.env
+.env.*
+*.log
+*.zip
+*.sqlite3*
+*.db*

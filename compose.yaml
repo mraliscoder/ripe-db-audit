@@ -1,0 +1,31 @@
+services:
+  analyzer:
+    image: ${AUDIT_IMAGE:-ripe-db-audit:local}
+    build:
+      context: .
+    init: true
+    ports:
+      - "${AUDIT_BIND:-127.0.0.1}:${AUDIT_PORT:-8090}:8090"
+    environment:
+      AUDIT_DB: /app/data/audit.sqlite3
+      AUDIT_MAX_JOBS: ${AUDIT_MAX_JOBS:-2}
+      AUDIT_MAX_OBJECTS: ${AUDIT_MAX_OBJECTS:-20000}
+      AUDIT_MAX_ROUTING_QUERIES: ${AUDIT_MAX_ROUTING_QUERIES:-4096}
+      AUDIT_JOB_TIMEOUT: ${AUDIT_JOB_TIMEOUT:-1800}
+      AUDIT_ACCESS_TOKEN: ${AUDIT_ACCESS_TOKEN:-}
+      RIPE_API_KEYS_JSON:
+      AUDIT_WEBHOOK_URL: ${AUDIT_WEBHOOK_URL:-}
+      AUDIT_WEBHOOK_SECRET: ${AUDIT_WEBHOOK_SECRET:-}
+    volumes:
+      - analysis-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 30s
+volumes:
+  analysis-data:
