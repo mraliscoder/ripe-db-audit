@@ -20,8 +20,7 @@ create tickets.
 
 ## Quick start
 
-Requires Docker with the Compose plugin. Published images support **Linux amd64
-and arm64** and can be pulled without signing in.
+Requires Docker with the Compose plugin. Published images support **Linux amd64** and can be pulled without signing in.
 
 ```sh
 git clone https://github.com/mraliscoder/ripe-db-audit.git
@@ -231,7 +230,7 @@ macOS location.
 [Release history](https://github.com/mraliscoder/ripe-db-audit/releases) ·
 [Container images](https://github.com/mraliscoder/ripe-db-audit/pkgs/container/ripe-db-audit)
 
-Pushing a version tag runs the release checks, publishes multi-platform images to
+Pushing a version tag runs the release checks, publishes Linux amd64 images to
 `ghcr.io/mraliscoder/ripe-db-audit` and creates a GitHub release:
 
 ```sh
